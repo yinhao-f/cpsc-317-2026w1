@@ -9,12 +9,17 @@ import java.io.PrintWriter;
 import java.net.Socket;
 import java.util.*;
 
+import java.io.InputStreamReader;
+
 /**
  * Created by Jonatan on 2017-09-09.
  */
 public class DictionaryConnection {
 
     private static final int DEFAULT_PORT = 2628;
+    private Socket socket;
+    private PrintWriter out;
+    private BufferedReader in;
 
     /** Establishes a new connection with a DICT server using an explicit host and port number, and handles initial
      * welcome messages.
@@ -26,7 +31,17 @@ public class DictionaryConnection {
      */
     public DictionaryConnection(String host, int port) throws DictConnectionException {
         // TODO Replace this with code that creates the requested connection
-        throw new DictConnectionException("Not implemented");
+        // throw new DictConnectionException("Not implemented");
+        
+	try {
+	    this.socket = new Socket(host, port);
+	    this.out = new PrintWriter(socket.getOutputStream(), true);
+	    this.in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+
+	    System.out.println(in.readLine());
+	} catch (Exception e) {
+	    throw new DictConnectionException("Failed to create socket");
+	}
     }
 
     /** Establishes a new connection with a DICT server using an explicit host, with the default DICT port number, and
@@ -47,6 +62,11 @@ public class DictionaryConnection {
     public synchronized void close() {
 
         // TODO Add your code here
+	try {
+	    this.out.println("QUIT");
+	    System.out.println(in.readLine());
+	    this.socket.close();
+	} catch (Exception e) {}
     }
 
     /** Requests and retrieves all definitions for a specific word.
