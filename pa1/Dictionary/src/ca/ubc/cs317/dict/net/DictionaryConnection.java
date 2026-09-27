@@ -4,12 +4,13 @@ import ca.ubc.cs317.dict.model.Database;
 import ca.ubc.cs317.dict.model.Definition;
 import ca.ubc.cs317.dict.model.MatchingStrategy;
 
-import java.io.BufferedReader;
-import java.io.PrintWriter;
-import java.net.Socket;
+// import java.io.BufferedReader;
+// import java.io.PrintWriter;
+// import java.net.Socket;
 import java.util.*;
 
-import java.io.InputStreamReader;
+import java.io.*;
+import java.net.*;
 
 /**
  * Created by Jonatan on 2017-09-09.
@@ -38,9 +39,23 @@ public class DictionaryConnection {
 	    this.out = new PrintWriter(socket.getOutputStream(), true);
 	    this.in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
-	    System.out.println(in.readLine());
+	    String response = in.readLine();
+	    if (response.isEmpty()) throw new DictConnectionException("Did not receive initial message from server.");
+
+	    // Handle negative replies
+	    if (response.startsWith("4")) throw new DictConnectionException("Received Transient Negative Completion reply.");
+	    if (response.startsWith("5")) throw new DictConnectionException("Received Permanent Negative Completion reply.");
+
+	    // If OK, print the welcome message. 
+	    System.out.println(response);
+	} catch (DictConnectionException e) {
+            throw e;
+	} catch (UnknownHostException e) {
+            throw new DictConnectionException("Don't know about host " + host);
+	} catch (IOException e) {
+	    throw new DictConnectionException("IO error when creating socket. ");
 	} catch (Exception e) {
-	    throw new DictConnectionException("Failed to create socket");
+	    throw new DictConnectionException("Something else went wrong when creating a socket.");
 	}
     }
 
@@ -114,8 +129,37 @@ public class DictionaryConnection {
         Map<String, Database> databaseMap = new HashMap<>();
 
         // TODO Add your code here
+	try {
+	    this.out.println("SHOW DATABASES");
+	    
+	    String response = in.readLine();
+	    // Check if reponse code is 110 or 554
+	    if (response.startsWith("554")) return databaseMap;
+	    if (!response.startsWith("110")) throw new DictConnectionException("Invalid response from server.");
 
-        return databaseMap;
+	    response = in.readLine();
+            while (!response.equals(".")) {
+		// Parse the responses
+		int splitPos = response.indexOf(" ");
+		String dbName = response.substring(0, splitPos);
+		String dbInfo = response.substring(splitPos + 1);
+		dbInfo = dbInfo.replaceAll("\"", "");
+		Database newDb = new Database(dbName, dbInfo);
+		databaseMap.put(dbName, newDb);
+
+		response = in.readLine();
+	    }
+
+	    return databaseMap;
+
+	} catch (DictConnectionException e) {
+            throw e;
+	} catch (IOException e) {
+	    throw new DictConnectionException("IO error when retrieving databases.");
+	} catch (Exception e) {
+	    throw new DictConnectionException("Something else went wrong when retrieving databases.");
+	}
+
     }
 
     /** Requests and retrieves a list of all valid matching strategies supported by the server.
