@@ -45,9 +45,6 @@ public class DictionaryConnection {
 	    // Handle negative replies
 	    if (response.startsWith("4")) throw new DictConnectionException("Received Transient Negative Completion reply.");
 	    if (response.startsWith("5")) throw new DictConnectionException("Received Permanent Negative Completion reply.");
-
-	    // If OK, print the welcome message. 
-	    System.out.println(response);
 	} catch (DictConnectionException e) {
             throw e;
 	} catch (UnknownHostException e) {
@@ -57,6 +54,8 @@ public class DictionaryConnection {
 	} catch (Exception e) {
 	    throw new DictConnectionException("Something else went wrong when creating a socket.");
 	}
+
+        System.out.printf("Connected to %s at port %d. \n", host, port);
     }
 
     /** Establishes a new connection with a DICT server using an explicit host, with the default DICT port number, and
@@ -79,9 +78,11 @@ public class DictionaryConnection {
         // TODO Add your code here
 	try {
 	    this.out.println("QUIT");
-	    System.out.println(in.readLine());
+	    System.out.println(this.in.readLine());
 	    this.socket.close();
 	} catch (Exception e) {}
+
+	System.out.println("Closed connection.");
     }
 
     /** Requests and retrieves all definitions for a specific word.
@@ -132,12 +133,12 @@ public class DictionaryConnection {
 	try {
 	    this.out.println("SHOW DATABASES");
 	    
-	    String response = in.readLine();
+	    String response = this.in.readLine();
 	    // Check if reponse code is 110 or 554
 	    if (response.startsWith("554")) return databaseMap;
 	    if (!response.startsWith("110")) throw new DictConnectionException("Invalid response from server.");
 
-	    response = in.readLine();
+	    response = this.in.readLine();
             while (!response.equals(".")) {
 		// Parse the responses
 		int splitPos = response.indexOf(" ");
@@ -147,10 +148,10 @@ public class DictionaryConnection {
 		Database newDb = new Database(dbName, dbInfo);
 		databaseMap.put(dbName, newDb);
 
-		response = in.readLine();
+		response = this.in.readLine();
 	    }
 
-	    return databaseMap;
+	    if (!this.in.readLine().startsWith("250")) throw new DictConnectionException("Did not get 250 ok from server.");
 
 	} catch (DictConnectionException e) {
             throw e;
@@ -159,6 +160,9 @@ public class DictionaryConnection {
 	} catch (Exception e) {
 	    throw new DictConnectionException("Something else went wrong when retrieving databases.");
 	}
+
+	System.out.println("Retrieved databases.");
+	return databaseMap;
 
     }
 
@@ -171,7 +175,34 @@ public class DictionaryConnection {
         Set<MatchingStrategy> set = new LinkedHashSet<>();
 
         // TODO Add your code here
+	try {
+	    this.out.println("SHOW STRATEGIES");
+	    String response = this.in.readLine();
+	    if (response.startsWith("555")) return set;
+	    if (!response.startsWith("111")) throw new DictConnectionException("Invalid response when retrieving strategies.");
 
+	    response = this.in.readLine();
+	    while (!response.startsWith(".")) {
+		int splitPos = response.indexOf(" ");
+		String stratName = response.substring(0, splitPos);
+		String stratInfo = response.substring(splitPos + 1);
+		stratInfo = stratInfo.replaceAll("\"", "");
+
+		MatchingStrategy newStrat = new MatchingStrategy(stratName, stratInfo);
+		set.add(newStrat);
+
+		response = this.in.readLine();
+	    }
+
+	    if (!this.in.readLine().startsWith("250")) throw new DictConnectionException("Did not get 250 ok from server.");
+
+	} catch (DictConnectionException e) {
+	    throw e;
+	} catch (Exception e) {
+	    throw new DictConnectionException("Something else went wrong when retrieving strategies.");
+	}
+
+	System.out.println("Retrieved strategies.");
         return set;
     }
 
@@ -184,7 +215,28 @@ public class DictionaryConnection {
 	StringBuilder sb = new StringBuilder();
 
         // TODO Add your code here
+        try {
+	    this.out.println("SHOW INFO " + d.getName());
+	    String response = this.in.readLine();
 
-        return sb.toString();
+	    if (response.startsWith("550")) throw new DictConnectionException("Invalid database for SHOW INFO.");
+
+	    response = this.in.readLine();
+
+	    while (!response.startsWith(".")) {
+		sb.append(response + "\n");
+		response = this.in.readLine();
+	    }
+	    
+            if (!this.in.readLine().startsWith("250")) throw new DictConnectionException("Did not get 250 ok from server.");
+	} catch (DictConnectionException e) {
+	    throw e;
+	} catch (Exception e) {
+	    throw new DictConnectionException("Something else went wrong when getting database info.");
+	}
+
+	System.out.printf("Retrieved info for database %s.\n", d.getName());
+	return sb.toString();
+ 
     }
 }
