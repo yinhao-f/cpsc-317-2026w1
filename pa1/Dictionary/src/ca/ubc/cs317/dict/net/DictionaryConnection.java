@@ -78,7 +78,6 @@ public class DictionaryConnection {
         // TODO Add your code here
 	try {
 	    this.out.println("QUIT");
-	    System.out.println(this.in.readLine());
 	    this.socket.close();
 	} catch (Exception e) {}
 
@@ -99,6 +98,43 @@ public class DictionaryConnection {
         Collection<Definition> set = new ArrayList<>();
 
         // TODO Add your code here
+	try {
+	    this.out.printf("DEFINE %s %s\n", database.getName(), word);
+
+	    String response = this.in.readLine();
+	    if (response.startsWith("550")) {
+		System.out.println("Invalid database.");
+		return set;
+	    }
+	    if (response.startsWith("552")) {
+		System.out.println("No match found.");
+		return set;
+	    }
+	    if (!response.startsWith("150")) throw new DictConnectionException("Invalid response from server.");
+
+	    response = this.in.readLine();
+	    while (!response.startsWith("250")) {
+		String[] parsed = response.split("\"");
+		Definition newDef = new Definition(parsed[1].trim(), parsed[2].trim());
+
+		// Read the definition
+		response = this.in.readLine();
+		while (!response.startsWith(".")) {
+		    newDef.appendDefinition(response);
+		    response = this.in.readLine();
+		}
+
+		set.add(newDef);
+		response = this.in.readLine();
+	    }
+
+	    if (!response.startsWith("250")) throw new DictConnectionException("Did not get 250 ok from server.");
+
+	} catch (DictConnectionException e) {
+	    throw e;
+	} catch (Exception e) {
+	    throw new DictConnectionException("Something else went wrong when retrieving definition.");
+	}
 
         return set;
     }
@@ -117,7 +153,42 @@ public class DictionaryConnection {
         Set<String> set = new LinkedHashSet<>();
 
         // TODO Add your code here
+	try {
+	    this.out.printf("MATCH %s %s %s\n", database.getName(), strategy.getName(), word);
 
+	    String response = this.in.readLine();
+	    if (response.startsWith("550")) {
+		System.out.println("Invalid database.");
+		return set;
+	    }
+	    if (response.startsWith("551")) {
+		System.out.println("Invalid strategy.");
+		return set;
+	    }
+	    if (response.startsWith("552")) {
+		System.out.println("No match found.");
+		return set;
+	    }
+
+	    if (!response.startsWith("152")) throw new DictConnectionException("Invalid response from server.");
+
+	    response = this.in.readLine();
+	    while (!response.startsWith(".")) {
+		int splitPos = response.indexOf(" ");
+		String match = response.substring(splitPos + 1).replaceAll("\"", "");
+		set.add(match);
+		response = this.in.readLine();
+	    }
+
+            if (!this.in.readLine().startsWith("250")) throw new DictConnectionException("Did not get 250 ok from server.");
+
+        } catch (DictConnectionException e) {
+	    throw e;
+	} catch (Exception e) {
+	    throw new DictConnectionException("Something else went wrong when matching a word.");
+	}
+
+	System.out.printf("Matched %s with strategy %s in database %s.\n", word, strategy.getName(), database.getName());
         return set;
     }
 
