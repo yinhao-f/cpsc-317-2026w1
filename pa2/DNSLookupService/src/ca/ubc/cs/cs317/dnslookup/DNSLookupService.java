@@ -140,7 +140,10 @@ public class DNSLookupService {
      */
     public DNSMessage buildQuery(DNSQuestion question) {
         /* TODO: To be implemented by the student */
-        return new DNSMessage((short)23);
+	short randomID = (short) random.nextInt();
+	DNSMessage query = new DNSMessage(randomID);
+	query.addQuestion(question);
+        return query;
     }
 
     /**
@@ -164,7 +167,46 @@ public class DNSLookupService {
      */
     public Set<ResourceRecord> processResponse(DNSMessage message) throws DNSErrorException, DNSReplyTruncatedException {
         /* TODO: To be implemented by the student */
-        return null;
+	if (message.getRcode() != 0) {
+	    throw new DNSErrorException(message.dnsErrorMessage(message.getRcode()));
+	}
+	if (message.getTC()) {
+	    throw new DNSReplyTruncatedException("TC bit is 1 in the reply header.");
+	}
+
+	verbose.printResponseHeaderInfo(message.getID(), message.getAA(), message.getTC(), message.getRcode());
+
+	Set<ResourceRecord> result = new HashSet<>();
+	int ANCount = message.getANCount();
+	int NSCount = message.getNSCount();
+	int ARCount = message.getARCount();
+
+	message.getQuestion();
+
+	verbose.printAnswersHeader(ANCount);
+	for (int i = 0; i < ANCount; i++) {
+            ResourceRecord record = message.getRR();
+	    cache.addResult(record);
+	    result.add(record);
+	    verbose.printIndividualResourceRecord(record, record.getRecordType().getCode(), record.getRecordClassCode());
+	}
+	    
+	verbose.printNameserversHeader(NSCount);
+	for (int i = 0; i < NSCount; i++) {
+	    ResourceRecord record = message.getRR();
+	    cache.addResult(record);
+	    result.add(record);
+	    verbose.printIndividualResourceRecord(record, record.getRecordType().getCode(), record.getRecordClassCode());
+	}
+
+	verbose.printAdditionalInfoHeader(ARCount);
+	for (int i = 0; i < ARCount; i++) {
+	    ResourceRecord record = message.getRR();
+	    cache.addResult(record);
+	    result.add(record);
+	    verbose.printIndividualResourceRecord(record, record.getRecordType().getCode(), record.getRecordClassCode());
+	}
+	return result;
     }
 
     public static class DNSErrorException extends Exception {

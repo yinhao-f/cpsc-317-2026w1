@@ -1,0 +1,5 @@
+sources
+tests
+*.class
+out/
+*.jar
