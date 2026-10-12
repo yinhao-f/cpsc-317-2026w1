@@ -52,6 +52,24 @@ public class DNSLookupService {
             throws DNSErrorException {
         Set<ResourceRecord> ans = new HashSet<>();
         /* TODO: To be implemented by the student */
+	if (containsAnswer(cache.getCachedResults(question), question)) return cache.getCachedResults(question);
+
+	List<ResourceRecord> nameServers = cache.getBestNameservers(question);
+	nameServers = cache.filterByKnownIPAddress(nameServers);
+	if (nameServers.isEmpty()) return null;
+
+	while (!nameServers.isEmpty()) {
+	    ResourceRecord nameServer = nameServers.get(0);
+	    try {
+		ans = individualQueryProcess(question, nameServer.getInetResult());
+		if (containsAnswer(ans, question)) return ans;
+		nameServers = cache.filterByKnownIPAddress(cache.getBestNameservers(question));
+	    } catch (DNSErrorException e) {
+		nameServers.remove(0);
+		continue;
+	    }
+	}
+
         return ans;
     }
 
