@@ -125,7 +125,52 @@ public class DNSLookupService {
     public Set<ResourceRecord> individualQueryProcess(DNSQuestion question, InetAddress server)
             throws DNSErrorException {
         /* TODO: To be implemented by the student */
-        return null;
+	Set<ResourceRecord> result = new HashSet<>();
+
+	try {
+	    socket.setSoTimeout(SO_TIMEOUT);
+
+	    DNSMessage query = buildQuery(question);
+	    byte[] buffer = query.getUsed();
+	    DatagramPacket packet = new DatagramPacket(buffer, buffer.length, server, DEFAULT_DNS_PORT);
+	    verbose.printQueryToSend("UDP", question, server, query.getID());
+	    socket.send(packet);
+
+	    byte[] recvBuffer = new byte[512];
+	    DatagramPacket recvPacket = new DatagramPacket(recvBuffer, recvBuffer.length);
+
+	    int queryAttempts = 1;
+	    while (queryAttempts < MAX_QUERY_ATTEMPTS) {
+		try {
+		    socket.receive(recvPacket);
+		    
+		    DNSMessage recvMessage = new DNSMessage(recvBuffer, recvBuffer.length);
+		    // Not a response
+		    if (!recvMessage.getQR()) throw new SocketTimeoutException("Not a response.");
+
+		    // IDs don't match
+		    if (recvMessage.getID() != query.getID()) throw new SocketTimeoutException("IDs don't match.");
+		    
+		    result = processResponse(recvMessage);
+		    break;
+		} catch (SocketTimeoutException e) {
+		    verbose.printQueryToSend("UDP", question, server, query.getID());
+		    socket.send(packet);
+		    queryAttempts++;
+		    continue;
+		}
+	    }
+	    if (queryAttempts > MAX_QUERY_ATTEMPTS) return null;
+
+	} catch (DNSErrorException e) {
+	    throw e;
+	} catch (DNSReplyTruncatedException e) {
+	    // TODO: try TCP
+	    throw new DNSErrorException("Not implemented yet.");
+	} catch (Exception e) {
+	    throw new DNSErrorException(e.getMessage());
+	}
+        return result;
     }
 
     /**
