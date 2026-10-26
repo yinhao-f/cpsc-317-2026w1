@@ -33,4 +33,29 @@
  * invoke the handler on a new thread. */
 void run_server(const char *port, void (*handler)(void *)) {
     // TODO: Implement this function
+    int sockfd, newfd;
+    struct sockaddr_in addr;
+    socklen_t addrlen;
+    const int BACKLOG = 10;
+
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(atoi(port));
+    addr.sin_addr = (struct in_addr){INADDR_ANY};
+
+    addrlen = sizeof(addr);
+
+    bind(sockfd, (struct sockaddr *)&addr, addrlen);
+
+    while (1) {
+	listen(sockfd, BACKLOG);
+	newfd = accept(sockfd, NULL, NULL);
+
+	// Single-thread
+	handler(&newfd);
+
+	// Multi-threading
+	//pthread_t thread;
+	//pthread_create(&thread, NULL, (void *) handler, &newfd);
+    }
 }
