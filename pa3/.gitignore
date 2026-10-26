@@ -1,0 +1,4 @@
+mypopd
+*.o
+mail.store
+out.p.*
