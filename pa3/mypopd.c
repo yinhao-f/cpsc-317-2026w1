@@ -29,6 +29,7 @@ typedef struct serverstate {
     struct utsname my_uname;
     // TODO: Add additional fields as necessary
     char *user_name;
+    mail_list_t mail_list;
 } serverstate;
 
 static void handle_client(void *new_fd);
@@ -102,6 +103,7 @@ int do_pass(serverstate *ss) {
     int cs = checkstate(ss, AUTHORIZATION);
     if (cs != 0) return cs;
     if (ss->nwords != 2) return syntax_error(ss);
+
     if (ss->user_name == NULL) {
 	dlog("User name not provided yet\n");
 	if (send_formatted(ss->fd, "-ERR Please enter a user name first\r\n") <= 0) return -1;
@@ -116,6 +118,7 @@ int do_pass(serverstate *ss) {
     }
 
     ss->state = TRANSACTION;
+    ss->mail_list = load_user_mail(ss->user_name);
     dlog("User %s authenticated\n", ss->user_name);
     if (send_formatted(ss->fd, "+OK Welcome, %s\r\n", ss->user_name) <= 0) return -1;
     return 0;
@@ -124,24 +127,90 @@ int do_pass(serverstate *ss) {
 int do_stat(serverstate *ss) {
     dlog("Executing stat\n");
     // TODO: Implement this function
+    int cs = checkstate(ss, TRANSACTION);
+    if (cs != 0) return cs;
+    if (ss->nwords != 1) return syntax_error(ss);
+
+    int length = mail_list_length(ss->mail_list, 0);
+    size_t size = mail_list_size(ss->mail_list);
+
+    if (send_formatted(ss->fd, "+OK %d %zu\r\n", length, size) <= 0) return -1;
     return 0;
 }
 
 int do_list(serverstate *ss) {
     dlog("Executing list\n");
     // TODO: Implement this function
+    int cs = checkstate(ss, TRANSACTION);
+    if (cs != 0) return cs;
+
+    if (ss->nwords == 1) {
+	// list all mails
+	int length = mail_list_length(ss->mail_list, 0);
+	size_t size = mail_list_size(ss->mail_list);
+	if (send_formatted(ss->fd, "+OK %d messages (%zu bytes)\r\n", length, size) <= 0) return -1;
+
+	int msg_num = 1;
+	int sum = 0;
+	while (sum < length) {
+	    mail_item_t item = mail_list_retrieve(ss->mail_list, msg_num-1);
+	    if (item) {
+		if (send_formatted(ss->fd, "%d %zu\r\n", msg_num, mail_item_size(item)) <= 0) return -1;
+		sum++;
+	    }
+	    msg_num++;
+	}
+
+	if (send_formatted(ss->fd, ".\r\n") <= 0) return -1;
+    } else if (ss->nwords == 2) {
+	// list a single mail
+	int msg_num = atoi(ss->words[1]);
+	mail_item_t item = mail_list_retrieve(ss->mail_list, msg_num - 1);
+	if (item) {
+	    if (send_formatted(ss->fd, "+OK %d %zu\r\n", msg_num, mail_item_size(item)) <= 0) return -1;
+	} else {
+	    if (send_formatted(ss->fd, "-ERR no such message\r\n") <= 0) return -1;
+	    return 1;
+	}
+    } else {
+	return syntax_error(ss);
+    }
     return 0;
 }
 
 int do_retr(serverstate *ss) {
     dlog("Executing retr\n");
     // TODO: Implement this function
+    int cs = checkstate(ss, TRANSACTION);
+    if (cs != 0) return cs;
+    if (ss->nwords != 2) return syntax_error(ss);
+
+    int msg_num = atoi(ss->words[1]);
+    mail_item_t item = mail_list_retrieve(ss->mail_list, msg_num - 1);
+    if (!item) {
+	if (send_formatted(ss->fd, "-ERR no such message\r\n") <= 0) return -1;
+	return 1;
+    }
+
+    if (send_formatted(ss->fd, "+OK message follows\r\n") <= 0) return -1;
+    FILE *fptr = mail_item_contents(item);
+    char buf[MAX_LINE_LENGTH];
+    while (fgets(buf, MAX_LINE_LENGTH, fptr)) {
+	if (send_all(ss->fd, buf, strlen(buf)) < 0) return -1;
+    }
+    if (send_formatted(ss->fd, ".\r\n") <= 0) return -1;
     return 0;
 }
 
 int do_rset(serverstate *ss) {
     dlog("Executing rset\n");
     // TODO: Implement this function
+    int cs = checkstate(ss, TRANSACTION);
+    if (cs != 0) return cs;
+    if (ss->nwords != 1) return syntax_error(ss);
+
+    int rv = mail_list_undelete(ss->mail_list);
+    if (send_formatted(ss->fd, "+OK recovered %d messages\r\n", rv) <= 0) return -1;
     return 0;
 }
 
@@ -159,6 +228,19 @@ int do_noop(serverstate *ss) {
 int do_dele(serverstate *ss) {
     dlog("Executing dele\n");
     // TODO: Implement this function
+    int cs = checkstate(ss, TRANSACTION);
+    if (cs != 0) return cs;
+    if (ss->nwords != 2) return syntax_error(ss);
+
+    int msg_num = atoi(ss->words[1]);
+    mail_item_t item = mail_list_retrieve(ss->mail_list, msg_num - 1);
+    if (!item) {
+	if (send_formatted(ss->fd, "-ERR no such message\r\n") <= 0) return -1;
+	return 1;
+    }
+
+    mail_item_delete(item);
+    if (send_formatted(ss->fd, "+OK message %d deleted\r\n", msg_num) <= 0) return -1;
     return 0;
 }
 
@@ -230,7 +312,8 @@ void handle_client(void *new_fd) {
 	if (res == -1) break;
     }
     // TODO: Clean up fields in `serverstate`, if required
+    mail_list_destroy(ss->mail_list);
     nb_destroy(ss->nb);
     close(fd);
-    free(new_fd);
+    //free(new_fd);	// No need to free the pointer that's passed from caller
 }
