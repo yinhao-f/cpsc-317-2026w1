@@ -52,10 +52,10 @@ void run_server(const char *port, void (*handler)(void *)) {
 	newfd = accept(sockfd, NULL, NULL);
 
 	// Single-thread
-	handler(&newfd);
+	//handler(&newfd);
 
 	// Multi-threading
-	//pthread_t thread;
-	//pthread_create(&thread, NULL, (void *) handler, &newfd);
+	pthread_t thread;
+	pthread_create(&thread, NULL, (void *) handler, &newfd);
     }
 }
