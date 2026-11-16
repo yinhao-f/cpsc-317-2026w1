@@ -1,0 +1,7 @@
+*.o
+router
+tester
+testip
+waitForPorts
+*.dSYM
+
